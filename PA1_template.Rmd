@@ -25,12 +25,13 @@ nrow(step_data)
 
 
 ### Make a histogram of the total number of steps taken each day
-```{r hist_total_num_steps_daily}
+```{r hist_total_num_steps_daily, fig.height=7}
 # sum steps by date
 step_data.sum <- aggregate(step_data$steps ~ step_data$date
                            , data = step_data
                            , FUN = sum)
 colnames(step_data.sum) <- c("date", "steps")
+
 # LL:  step_data.sum$steps = step_data.sum[[2]] = step_data.sum[,2]
 hist(step_data.sum$steps
      , main = "Total Number of Steps Taken Each Day"
@@ -54,20 +55,19 @@ colnames(step_data.median) <- c("date", "median")
 
 step_data.mean.median <- merge(step_data.mean, step_data.median)
 
+# determine mean and median of raw dataset ignoring NA values
 step_data_mean <- mean(step_data$steps, na.rm=TRUE)
 step_data_median <- median(step_data$steps, na.rm=TRUE)
 
-# sanity check
-summary(step_data)
 ```
 
-Ignoring NA values of the average number of steps for that given interval results in the mean of `r step_data_mean` and a median of `r step_data_median`.
+The mean and median for the raw step date ignoring NA values is `r step_data_mean` and `r step_data_median`, respectively.
 
-
-```{r results="asis"}
+The mean and median values for a given date are as followed:
+```{r base_stats, results="asis"}
 library(xtable)
-xt <- xtable(step_data.mean.median)
-print(xt, type="html")
+xt_base <- xtable(step_data.mean.median)
+print(xt_base, type="html")
 ```
 
 
@@ -77,25 +77,26 @@ print(xt, type="html")
 
 ### Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
 ```{r time_series_plot}
-step_data.avg <- aggregate(step_data$steps ~ step_data$interval * step_data$date
-                           , data = step_data
-                           , FUN = mean
-                           , na.rm = TRUE)
-colnames(step_data.avg) <- c("interval", "date", "steps")
-plot(x = step_data.avg$interval
-     , y = step_data.avg$steps
+step_data.ts_avg <- aggregate(step_data$steps ~ step_data$interval
+                              , data = step_data
+                              , FUN = mean
+                              , na.rm = TRUE)
+colnames(step_data.ts_avg) <- c("interval", "steps")
+plot(x = step_data.ts_avg$interval
+     , y = step_data.ts_avg$steps
+     , main = "Daily Avg Number of Steps Per 5-Minute Interval"
      , xlab = "Interval"
      , ylab = "Number of steps"
      , type = "l")
 
 # identify row with maximum number of steps
-max_num_step_row <- step_data.avg$steps == max(step_data.avg$steps);
-rec_max_num_steps <- step_data.avg[max_num_step_row,];
+max_num_step_row <- step_data.ts_avg$steps == max(step_data.ts_avg$steps);
+rec_max_num_steps <- step_data.ts_avg[max_num_step_row,];
 
 ```
 
 ### Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
-The 5-minute interval, on average across all the days, which contains the maximum number of steps is `r rec_max_num_steps$interval` [on `r rec_max_num_steps$date` for `r rec_max_num_steps$steps` steps]
+The 5-minute interval, on average across all the days, which contains the maximum number of steps is `r rec_max_num_steps$interval` [for `r rec_max_num_steps$steps` steps]
 
 
 ## Imputing missing values
@@ -111,17 +112,14 @@ The total number of incomplete is records is `r sum(!complete_recs)` [`r sum(!co
 ### Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
 ```{r fill_incomplete}
 # fill NA records with average for that interval, ignoring NA's
-step_data.avgperinterval <- aggregate(step_data$steps ~ step_data$interval
-                                      , data = step_data
-                                      , FUN = mean
-                                      , na.rm = TRUE)
-colnames(step_data.avgperinterval) <- c("interval", "steps")
+# e.g. use the data derived from the above time series plot
 
 getsteps <- function(p_interval) {
     # identify row for matching interval
-    row <- which(step_data.avgperinterval$interval == p_interval)
-    result <- step_data.avgperinterval$steps[row]
+    row <- which(step_data.ts_avg$interval == p_interval)
+    result <- step_data.ts_avg$steps[row]
     
+    # return average number of steps for given interval or 0 if not found
     return (ifelse( is.na(result)
                     , 0
                     , result))
@@ -134,38 +132,70 @@ getsteps <- function(p_interval) {
 ### Create a new dataset that is equal to the original dataset but with the missing data filled in.
 ```{r dup_dataset}
 step_data_copy <- step_data;
-step_data_copy$steps <- ifelse(is.na(step_data_copy$steps)
-                               , getsteps(step_data_copy$interval)    
-                               , step_data_copy$steps)
+# create a new column, steps_calc, which contains the new step value; used to compare
+# against the actual value from the file
+step_data_copy$steps_calc <- ifelse(is.na(step_data_copy$steps)
+                                    , getsteps(step_data_copy$interval)    
+                                    , step_data_copy$steps)
 
 ```
 
 
 ### Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
-```{r hist_with_filled_values}
+```{r hist_with_filled_values, fig.height=7}
 # sum steps by date
-step_data_copy.sum <- aggregate(step_data_copy$steps ~ step_data_copy$date
+step_data_copy.sum <- aggregate(step_data_copy$steps_calc ~ step_data_copy$date
                                 , data = step_data_copy
                                 , FUN = sum)
 colnames(step_data_copy.sum) <- c("date", "steps")
 
 hist(step_data_copy.sum$steps
-     , main = "Total Number of Steps Taken Each Day"
+     , main = "Total Number of Steps Taken Each Day After Missing Values Entered"
      , xlab = "Steps"
      , labels = TRUE)
 
-step_data_copy_mean <- mean(step_data_copy$steps)
-step_data_copy_median <- median(step_data_copy$steps)
+# determine mean and median of dataset when all values are filled
+step_data_copy_mean <- mean(step_data_copy$steps_calc)
+step_data_copy_median <- median(step_data_copy$steps_calc)
+
+
+step_data_copy.mean <- aggregate(step_data_copy$steps_calc ~ step_data_copy$date
+                                 , data = step_data_copy
+                                 , FUN = mean)
+colnames(step_data_copy.mean) <- c("date", "mean_filled")
+
+step_data_copy.median <- aggregate(step_data_copy$steps_calc ~ step_data_copy$date
+                                   , data = step_data_copy
+                                   , FUN = median)
+colnames(step_data_copy.median) <- c("date", "median_filled")
+
+step_data_copy.mean.median <- merge(step_data_copy.mean, step_data_copy.median)
 
 ```
 
 Filling NA values with the average number of steps for that given interval results in the mean of `r step_data_copy_mean` and a median of `r step_data_copy_median`.
 
 
-* The impact of filling in the missing data with the average number of steps for a given interval is
-    + a lower mean
-    + no change in median since there are quite a few zero values
 
+```{r filled_stats,results="asis"}
+compare_mean_median_plot <- merge(step_data.mean.median, step_data_copy.mean.median)
+
+library(xtable)
+xt_compare <- xtable(compare_mean_median_plot)
+print(xt_compare, type="html")
+```
+
+```{r step_data_compare_table}
+summary(step_data_copy)
+```
+
+
+* The impact of filling in the missing data with the average number of steps for a given interval is
+    + a slightly lower mean due to more observations whose value was determined by an average for that interval
+    + no change in median since there are quite a few zero values
+    + comparing the histograms of the total number of steps taken each day reveals slightly higher values for the graph where the missing data was initialized
+    + comparing the means and medians, however, reveals no differences [not entire sure why???]
+    
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
@@ -188,10 +218,10 @@ step_data_copy$wend <- as.factor(ifelse(weekdays(as.Date(step_data_copy$date))
 ### Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
 ```{r weekday_weekend_plot}
 step_data_copy.avg <- aggregate(step_data_copy$steps 
-                                ~ step_data_copy$interval * step_data_copy$date * step_data_copy$wend
+                                ~ step_data_copy$interval * step_data_copy$wend
                                 , data = step_data_copy
                                 , FUN = mean)
-colnames(step_data_copy.avg) <- c("interval", "date", "wend", "steps")
+colnames(step_data_copy.avg) <- c("interval", "wend", "steps")
 
 
 t_weekdays <- step_data_copy.avg[step_data_copy.avg$wend %in% c("weekday"),]
